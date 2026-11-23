@@ -1,0 +1,142 @@
+﻿import { useState } from 'react'
+
+import GameSection from '../components/home/GameSection'
+import HomeMobileFilters from '../components/home/HomeMobileFilters'
+import HomePromos from '../components/home/HomePromos'
+import HomeSidebar from '../components/home/HomeSidebar'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { useGameSearch, useGames } from '../hooks/useGames'
+import { useLanguage } from '../i18n/LanguageContext'
+
+const HOME_SECTIONS = [
+  {
+    id: 'slots',
+    title: 'Slots',
+    viewAll: '/casino?filter=slots',
+    source: { type: 'slot' },
+    emptyMessage: 'No slot games are available right now.',
+  },
+  {
+    id: 'crash-games',
+    title: 'Crash Games',
+    badge: 'HOT',
+    viewAll: '/crash-games',
+    source: { type: 'crash' },
+    emptyMessage: 'No crash games are available right now.',
+  },
+  {
+    id: 'casino-live',
+    title: 'Casino Live',
+    badge: 'LIVE',
+    viewAll: '/casino-live',
+    source: { category: 'casino_live' },
+    live: true,
+    emptyMessage: 'No live tables are available right now.',
+  },
+  {
+    id: 'new-games',
+    title: 'New Games',
+    badge: 'Fresh',
+    viewAll: '/casino?filter=new',
+    source: { category: 'casino', mode: 'new' },
+    emptyMessage: 'No new games are available right now.',
+  },
+]
+
+function HomeSection({ section, games, loading, error, reload }) {
+  return (
+    <GameSection
+      {...section}
+      games={games}
+      loading={loading}
+      error={error}
+      onRetry={reload}
+    />
+  )
+}
+
+function Home() {
+  const { t } = useLanguage()
+  const [query, setQuery] = useState('')
+  const term = query.trim()
+  const debouncedTerm = useDebouncedValue(term, 350)
+  const {
+    games: results,
+    loading: searchLoading,
+    error: searchError,
+    reload: reloadSearch,
+  } = useGameSearch(debouncedTerm, { perPage: 24 })
+
+  const slots = useGames({ ...HOME_SECTIONS[0].source, perPage: 24 })
+  const crash = useGames({ ...HOME_SECTIONS[1].source, perPage: 24 })
+  const live = useGames({ ...HOME_SECTIONS[2].source, perPage: 24 })
+  const newGames = useGames({ ...HOME_SECTIONS[3].source, perPage: 60 })
+
+  const seenIds = new Set()
+  slots.games.forEach((game) => seenIds.add(game.id))
+  crash.games.forEach((game) => seenIds.add(game.id))
+  live.games.forEach((game) => seenIds.add(game.id))
+
+  const newGamesFiltered = newGames.games
+    .filter((game) => !seenIds.has(game.id))
+    .slice(0, 24)
+
+  const searching = term.length > 0
+  const searchPending = searching && (debouncedTerm !== term || searchLoading)
+
+  return (
+    <div className="flex min-w-0 flex-1 bg-casino-pattern">
+      <HomeSidebar />
+
+      <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6 lg:px-8" data-purpose="game-catalog">
+        <div className="mx-auto max-w-7xl space-y-7">
+          <HomePromos />
+          <HomeMobileFilters />
+          <section data-purpose="global-search-container">
+            <div className="relative w-full shadow-lg">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-zinc-400">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" x2="16.65" y1="21" y2="16.65" />
+                </svg>
+              </div>
+              <input
+                className="w-full rounded-full border border-white/10 bg-[#101016]/90 py-2.5 pl-11 pr-5 text-sm text-zinc-100 placeholder-zinc-500 backdrop-blur-md transition duration-200 focus:border-[#d91528] focus:outline-none focus:ring-1 focus:ring-[#d91528]"
+                placeholder={t('Search games')}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label="Buscar juegos, dealers y proveedores"
+              />
+            </div>
+          </section>
+          {searching ? (
+            <GameSection
+              title="Search Results"
+              viewAll="/casino"
+              games={searchPending ? [] : results.slice(0, 24)}
+              loading={searchPending}
+              error={searchError}
+              onRetry={reloadSearch}
+              emptyMessage="Try another name, category or provider."
+            />
+          ) : (
+            <>
+              <HomeSection key={HOME_SECTIONS[0].id} section={HOME_SECTIONS[0]} {...slots} />
+              <HomeSection key={HOME_SECTIONS[1].id} section={HOME_SECTIONS[1]} {...crash} />
+              <HomeSection key={HOME_SECTIONS[2].id} section={HOME_SECTIONS[2]} {...live} />
+              <HomeSection
+                key={HOME_SECTIONS[3].id}
+                section={HOME_SECTIONS[3]}
+                {...newGames}
+                games={newGamesFiltered}
+              />
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  )
+}
+
+export default Home
